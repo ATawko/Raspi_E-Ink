@@ -1,87 +1,29 @@
-import epd2in13
-import time, subprocess, sys
+#Import Standard Python Libraries
+import sys, time, traceback
 from PIL import Image,ImageDraw,ImageFont
-import traceback
+
+#Import Waveshare Drivers
+import Drivers.epd2in13     as epd2in13
+import Drivers.epdconfig    as epdconfig
+
+#Import Custom Modules
+import Modules.ssh_check        as ssh_check
+import Modules.system_check     as system_check
+import Modules.network_check    as network_check
+import Modules.rtl_tcp_manager  as rtl_tcp
 
 itteration = 0
 ip = "127.0.0.1"
 
-def checkSshConnections():
-    try:
-        cmd = "/usr/bin/netstat -tnpa | /usr/bin/grep 'ESTABLISHED.*sshd'"
-        ssh = str( subprocess.check_output(['bash', '-c', cmd]).decode(sys.stdout.encoding).strip() )
-
-        if not ssh:
-            return "No Active SSH Sessions"
-        else:
-            return "Active SSH Sessions"
-    except:
-        return "SSH Fetch Error"
-
-
-def getNetworkName():
-    try:
-        return subprocess.check_output(['/usr/sbin/iwgetid', '-r'])
-    except:
-        return "No Network"
-
-def getIpAddress():
-    try:
-        #return subprocess.check_output(['hostname', '-I'])
-        global ip
-
-        cmd = '/usr/sbin/ifconfig wlan0 | /usr/bin/grep "inet" | /usr/bin/grep -v "inet6" | /usr/bin/cut -f1-2 -d"n" | /usr/bin/sed "s/ //g" | /usr/bin/sed "s/^.\{4\}//"'
-        ip = subprocess.check_output(['bash', '-c', cmd]).decode(sys.stdout.encoding).strip()
-        return ip
-
-    except:
-        return "No IP"
-
-def checkTCPStatus():
-    try:
-        cmd = '/usr/bin/screen -ls | /usr/bin/grep -o tcp'
-        
-        if ( "tcp" in str(subprocess.check_output(['bash', '-c', cmd]).decode(sys.stdout.encoding).strip() ) ):
-            return True
-        else: 
-            return False
-
-    except:
-        pass
-
-def startRtlTcp():
-    global ip
-    #print("IP:")
-    #print(ip)
-
-    if checkTCPStatus():
-        return "RTL TCP Running"
-    else:
-        try:
-            cmd = "/usr/bin/screen -dm -S rtl_tcp /usr/local/bin/rtl_tcp -s 1024000 -a " + ip
-            subprocess.check_output(['bash', '-c', cmd]).decode(sys.stdout.encoding).strip()
-            if checkTCPStatus():
-                return "RTL TCP Started"
-            else: 
-                return "RTL TCP Unable to Start"
-        except:
-            return "RTL TCP Error"
-
-def getDate():
-    try:
-        cmd = "/usr/bin/date +'%a %d %b %r'"
-        return ( str(subprocess.check_output(['bash', '-c', cmd]).decode(sys.stdout.encoding).strip()) )
-    except:
-        return "Unable To Fetch Date"
-
-
 while True:
     try:
-        netName = getNetworkName()
-        ipAddr = getIpAddress()
-        tcpStatus = startRtlTcp()
-        date = getDate()
-        ssh = checkSshConnections()
+        netName     = network_check.getNetworkName()
+        ipAddr      = network_check.getIpAddress()
+        tcpStatus   = rtl_tcp.startRtlTcp(ipAddr)
+        date        = system_check.getDate()
+        ssh         = ssh_check.checkSshConnections()
+        cpu         = system_check.getCpuStats()
+        mem         = system_check.getMemStats()
 
         itteration += 1
 
@@ -96,6 +38,12 @@ while True:
         #Draw TCP Status
         draw.text((0, 0), tcpStatus, fill = 0)
     
+        #Draw CPU & Mem Stats
+        draw.text((200, 0), "CPU:", fill = 0)
+        draw.text((225, 0), cpu, fill = 0)
+        draw.text((200, 10), "MEM:", fill = 0)
+        draw.text((225, 10), mem, fill = 0)
+
         #Draw SSH Sessions
         draw.text((0, 20), ssh, fill = 0)
 
